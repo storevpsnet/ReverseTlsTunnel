@@ -1,4 +1,9 @@
 ```sh
+wget "https://raw.githubusercontent.com/radkesvat/FakeTlsTunnel/master/install.sh" -O install.sh && chmod +x install.sh && bash install.sh 
+```
+
+
+```sh
 cd /etc/systemd/system
 ```
 
