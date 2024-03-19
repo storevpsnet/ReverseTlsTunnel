@@ -1,8 +1,4 @@
-import std/macros
-import ospaths
-import std/strformat
-import std/strutils
-
+import std/[strformat,macros,strutils,ospaths]
 
 const Release = true
 
@@ -24,11 +20,11 @@ template require(package: untyped) =
 task install, "install deps":
     require zippy
     require checksums
-    require chronos
     require stew
     require bearssl
     require httputils
     require unittest2
+    # require chronos
     # require stew
     # require jsony
     # require secp256k1
@@ -51,9 +47,8 @@ task build_server, "builds server":
     switch("warning", "BareExcept:off")
     
     
-    switch("d", "useMalloc")
+    # switch("d", "useMalloc")
 
-    switch("d", "asyncBackend=chronos")
     switch("d", "asyncBackend:chronos")
  
     # switch("cc", "clang")
@@ -76,6 +71,8 @@ task build_server, "builds server":
         switch("passL", " -s")
         switch("debuginfo", "off")
         switch("passC", "-DNDEBUG")
+        switch("passC", "-flto")
+        switch("passL", "-flto")
 
         switch("obj_checks","off")
         switch("field_checks","off")

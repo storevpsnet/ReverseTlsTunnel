@@ -1,151 +1,152 @@
 from globals import nil
-import random, strutils
+import random, strutils, bitops
 
 type
     DataFlags* {.size: sizeof(uint8), pure.} = enum
-        junk
+        junk,
+        udp
 
 
     TransferFlags* = set[DataFlags]
 
-# proc `+`*(x: ptr[uint32],y:int): ptr[uint32] =
+# proc `+`*(x: ptr[uint32],y:uint): ptr[uint32] =
+#   return cast[ptr[uint32]](cast[uint](x) + y)
 
-#   return cast[ptr[uint32]](cast[uint](x) + y.uint)
+# proc `+`(a:pointer,p:pointer): pointer =
+#   result = cast[pointer](cast[int](a) + 1 * sizeof(p))
 
-# proc encrypt(data: var string, start = 0) =
+# proc encrypt(data_pure: var string, start = 0) =
 #     let len = (data.len() - start) div 4
-#     var address = cast[ptr[uint32]](addr data[start])
+#     var data = cast[seq[uint32]](data_pure)
 #     for i in 0..<len:
-#         (address+i)[] = `xor`((address+i)[], globals.sh4)
+#         data[i] = `xor`(data[i], globals.sh4)
 
 
 # proc decrypt(data: var string) =
 #     var address =cast[ptr[uint32]](addr data[0])
-#     for i in 0 ..< data.len() div 4:
-#         (address+i)[] = `xor`((address+i)[], globals.sh4)
+#     for i in 0 ..< (data.len() div 4):
+#         (address+i.uint)[] = `xor`((address+i.uint)[], globals.sh4)
 
-# per byte = consume more cpu (testing)
-proc encrypt(data: var string, start = 0) =
-    for i in start..<data.len():
-        # data[i] = chr(rotateRightBits(uint8(data[i]), globals.sh5))
+# proc encrypt(data: var string, start:int = 0, nbytes: int = data.len()) =
+#     var i: int = start
+#     let loopmax = min(data.len(), start + nbytes)
+#     while i < loopmax:
+#         data[i] = chr(uint8(data[i]) xor cast[uint8](globals.sh5))
+#         i += 1
+
+# proc decrypt(data: var string, nbytes: int = data.len()) =
+
+#     var i: int = 0
+#     let loopmax = min(data.len(), nbytes)
+#     while i < loopmax:
+#         data[i] = chr(uint8(data[i]) xor cast[uint8](globals.sh5))
+#         i += 1
+
+proc encrypt(data: var string, start: int = 0, nbytes: int = data.len()) =
+    var i: int = start
+    let loopmax = min(data.len(), start + nbytes)
+    while i < loopmax:
         data[i] = chr(uint8(data[i]) xor cast[uint8](globals.sh5))
+        i += 2
 
-proc decrypt(data: var string) =
-    for i in 0..<data.len():
-        # data[i] = chr(rotateLeftBits(uint8(data[i]), globals.sh5))
+proc decrypt(data: var string, nbytes: int = data.len()) =
+
+    var i: int = 0
+    let loopmax = min(data.len(), nbytes)
+    while i < loopmax:
         data[i] = chr(uint8(data[i]) xor cast[uint8](globals.sh5))
-
-
-# proc muxPack(cid: uint32, port: uint16, data: string): string =
-#     result = newString(len = globals.mux_chunk_size)
-#     # copyMem(addr result[0], addr(globals.random_str[rand(250)]), result.len)
-
-#     var totake: uint16 = min(globals.mux_payload_size.uint16, data.len.uint16)
-
-#     copyMem(addr result[0], addr globals.tls13_record_layer[0], 3) #tls header
-#     copyMem(addr result[3], addr totake, 2) #tls len
-#     copyMem(addr result[5], addr port, 2)
-#     copyMem(addr result[7], addr cid, 4)
-
-#     result[11] = rand(char.low .. char.high).char
-
-#     if totake != 0:
-#         copyMem(addr result[12], addr data[0], totake)
-#     else:
-#         discard
-
-#     let diff = globals.mux_payload_size - totake
-#     if diff > 0:
-#         copyMem(addr result[totake+12], addr(globals.random_str[rand(250)]), diff)
-
-# proc muxRead(data: var string): tuple[cid: uint32, port: uint16, data: string] =
-#     var buffer = newString(len = globals.mux_payload_size)
-#     var cid: uint32
-#     var dlen: uint16
-#     var port: uint16
-#     copyMem(addr dlen, addr data[3], 2)
-#     copyMem(addr port, addr data[5], 2)
-
-#     copyMem(addr cid, addr data[7], 4)
-
-#     if dlen != 0:
-#         if dlen > globals.mux_payload_size.uint16 or dlen > data.len.uint16:
-#             return (0.uint32,0, "")
-#         copyMem(addr buffer[0], addr data[12], dlen)
-#         buffer.setLen(dlen)
-#     else:
-#         buffer.setLen(0)
-
-
-#     return (cid,port, buffer)
+        i += 2
 
 
 
-
-proc unPackForRead*(data: var string) =
-    decrypt data
+proc unPackForRead*(data: var string, bytes: int) =
+    decrypt data, bytes
 
 
 proc flagForSend*(data: var string, flags: TransferFlags) =
-    let width = globals.full_tls_record_len.int+sizeof(uint16)+sizeof(uint16) + sizeof(flags)
+    let width = globals.full_tls_record_len.int+sizeof(uint16)+sizeof(uint16) + sizeof(uint8)
     if data.len < width: data.setLen(width)
 
-    let size: uint16 = 0
-    copyMem(addr size, addr data[0 + globals.tls13_record_layer.len()], sizeof(size))
+    var size: uint16 = (data.len - globals.full_tls_record_len.int).uint16
 
-    let e_flags: uint8 = cast[uint8](flags) xor size.uint8
+    var dif: uint8 = 16 - (size mod 16).uint8
+
+    if dif == 16: dif = 0
+    data.setLen data.len + dif.int
+    size += dif
+
+    copyMem(addr data[0], addr globals.tls13_record_layer[0], globals.tls13_record_layer.len())
+    copyMem(addr data[0 + globals.tls13_record_layer.len()],addr size,  sizeof(size))
+
+
+    var e_flags: uint8 = bitand(cast[uint8](flags), 0xF)
+    e_flags = bitor((dif shl 4), e_flags)
+    e_flags = e_flags xor size.uint8
+
     copyMem(addr data[0 + globals.full_tls_record_len.int+sizeof(uint16)+sizeof(uint16)], addr e_flags, sizeof(e_flags))
 
 proc packForSend*(data: var string, cid: uint16, port: uint16, flags: TransferFlags = {}) =
-    let width = globals.full_tls_record_len.int+sizeof(port)+sizeof(cid) + sizeof(flags)
+    let width = globals.full_tls_record_len.int+sizeof(port)+sizeof(cid) + sizeof(uint8)
     if data.len < width: data.setLen(width)
 
-    let size: uint16 = data.len().uint16 - globals.full_tls_record_len.uint16
+    var size: uint16 = data.len().uint16 - globals.full_tls_record_len.uint16
+
+
+    var dif: uint8 = 16 - (size mod 16).uint8
+    if dif == 16: dif = 0
+    data.setLen data.len + dif.int
+    size += dif
+
+
     copyMem(addr data[0], addr globals.tls13_record_layer[0], globals.tls13_record_layer.len())
     copyMem(addr data[0 + globals.tls13_record_layer.len()], addr size, sizeof(size))
 
     let e_cid: uint16 = cid xor size
     let e_port: uint16 = port xor size
-    let e_flags: uint8 = cast[uint8](flags) xor size.uint8
 
+
+    var e_flags: uint8 = bitand(cast[uint8](flags), 0xF)
+    e_flags = bitor((dif shl 4), e_flags)
+    e_flags = e_flags xor size.uint8
 
     copyMem(addr data[0 + globals.full_tls_record_len.int], addr e_cid, sizeof(e_cid))
     copyMem(addr data[0 + globals.full_tls_record_len.int+sizeof(e_cid)], addr e_port, sizeof(e_port))
     copyMem(addr data[0 + globals.full_tls_record_len.int+sizeof(e_cid)+sizeof(e_port)], addr e_flags, sizeof(e_flags))
 
-    encrypt(data, width)
+    encrypt(data, width, globals.fast_encrypt_width.int)
 
 
 
 proc closeSignalData*(cid: uint16): string =
     let port: uint16 = rand(uint16.high.int).uint16
-    let flags: uint8 = rand(uint8.high.int).uint8
+    let flags: TransferFlags = {}
 
-    let width = globals.full_tls_record_len.int+sizeof(port)+sizeof(cid) + sizeof(flags)
+    let width = globals.full_tls_record_len.int+sizeof(port)+sizeof(cid) + sizeof(uint8)
+    var data = newStringOfCap(16); data.setLen(width)
 
-    var data = newString(len = width)
 
-    let size: uint16 = sizeof(port)+sizeof(cid) + sizeof(flags)
+    var size: uint16 = data.len().uint16 - globals.full_tls_record_len.uint16
+
+    var dif: uint8 = 16 - (size mod 16).uint8
+    if dif == 16: dif = 0
+    data.setLen data.len + dif.int
+    size += dif
+
+
+    # let size: uint16 = sizeof(port)+sizeof(cid) + sizeof(uint8)
     let e_cid: uint16 = cid xor size
+    var e_flags: uint8 = bitand(cast[uint8](flags), 0xF)
+    e_flags = bitor((dif shl 4), e_flags)
+    e_flags = e_flags xor size.uint8
 
     copyMem(addr data[0], addr globals.tls13_record_layer[0], globals.tls13_record_layer.len())
-    copyMem(addr data[0 + globals.tls13_record_layer.len], addr size, sizeof(size))
+    copyMem(addr data[0 + globals.tls13_record_layer.len()], addr size, sizeof(size))
 
 
     copyMem(addr data[0 + globals.full_tls_record_len.int], addr e_cid, sizeof(e_cid))
     copyMem(addr data[0 + globals.full_tls_record_len.int+sizeof(e_cid)], addr port, sizeof(port))
-    copyMem(addr data[0 + globals.full_tls_record_len.int+sizeof(e_cid)+sizeof(port)], addr flags, sizeof(flags))
+    copyMem(addr data[0 + globals.full_tls_record_len.int+sizeof(e_cid)+sizeof(port)], addr e_flags, sizeof(uint8))
     return data
-#returns connection id
-# proc unPackForReadMux*(data: var string): tuple[cid: uint32, port: uint16] =
-#     decrypt data
-#     var (result_cid, port, result_data) = muxRead(data)
-#     data = result_data
-#     return (result_cid, port)
 
-# proc packForSendMux*(cid: uint32, port: uint16, data: var string) =
-#     var muxres = muxPack(cid, port, data)
-#     encrypt muxres
-#     data = muxres
 
 
