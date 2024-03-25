@@ -1,5 +1,5 @@
 
-[آموزش های ویدویی](https://github.com/radkesvat/ReverseTlsTunnel/blob/master/docs/Tutorials.md)
+[آموزش های ویدویی]()
 
 [راهنمای  اجرای مالتی پورت](https://github.com/radkesvat/ReverseTlsTunnel/blob/master/docs/MultiPort.md)
 
@@ -58,7 +58,7 @@
  
  ![1](https://raw.githubusercontent.com/Ptechgithub/configs/main/media/1.jpg)
  
- - [آموزش در کانال @IR_TECH](https://youtube.com/watch?v=1mj1fhA2X6s)
+ - [آموزش در کانال @KYAVOX](https://youtube.com/@kyavox)
 - به صورت سرویس نصب میشود 
 - از پورت 23 به بالا میتوانید استفاده کنید. 
 - پورت 1 تا 22 قابل استفاده نیستند. 
